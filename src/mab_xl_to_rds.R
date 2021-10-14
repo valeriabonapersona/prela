@@ -61,7 +61,21 @@ mab <- dat_xl$out_behavior %>%
       str_detect(habituation, "arena") ~ "arena", 
       T ~ habituation
     ), 
-    cut_n_c = ifelse(is.na(cut_n_c), "no", cut_n_c)
+    
+    # summary stats
+    cut_n_c = ifelse(is.na(cut_n_c), "no", cut_n_c), 
+    n_c = str_replace_all(n_c, "_.*", "") %>% make_numeric(), # keep lowest
+    n_e = str_replace_all(n_e, "_.*", "") %>% make_numeric(), # keep lowest
+    sd_c = case_when(
+      #   deviation_c_type == "iqr" ~ iqr_to_sd(estimate_c, deviation_c), 
+      deviation_c_type %in% c("sem", "SEM", "SE") ~ sem_to_sd(deviation_c, n_c), 
+      T ~ make_numeric(deviation_c)
+    ),
+    sd_e = case_when(
+      #   deviation_e_type == "iqr" ~ iqr_to_sd(estimate_e, deviation_e), 
+      deviation_e_type %in% c("sem", "SEM", "SE") ~ sem_to_sd(deviation_e, n_e), 
+      T ~ make_numeric(deviation_e)
+    )
   ) %>% 
   
   # create var for age testing - get mean of start and end, convert to weeks - put together
@@ -132,5 +146,5 @@ mab <- dat_xl$out_behavior %>%
 
 
 # Save --------------------------------------------------------------------
-saveRDS(mab, paste(raw,"mab.RDS"))
-write.csv(mab, paste(raw,"mab.csv"))
+saveRDS(mab, paste0(raw,"mab.RDS"))
+write.csv(mab, paste0(raw,"mab.csv"))

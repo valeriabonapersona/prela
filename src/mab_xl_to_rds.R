@@ -53,6 +53,8 @@ mab <- dat_xl$out_behavior %>%
       sex == "F" ~ "female", 
       T ~ sex
     ), 
+    
+    # about the outcome
     retention_hours = ifelse(retention_to_test_unit == "min", 
                              as.numeric(retention_to_test) / 60, retention_to_test), 
     habituation = case_when(
@@ -62,6 +64,13 @@ mab <- dat_xl$out_behavior %>%
       T ~ habituation
     ), 
     
+    # about other life experiences
+    origin_num = ifelse(origin == "purchased_pregnant_dams", 1, 0),
+    behavior_num = ifelse(behavior == "stressful", 1, 0),
+    chronic_num = ifelse(major_life_events == "yes", 1, 0), # single housing is together with major life events
+    trauma_score = rowSums(across(ends_with("_num"))), 
+    trauma_presence = ifelse(trauma_score < 1, "no", "yes"),
+
     # summary stats
     cut_n_c = ifelse(is.na(cut_n_c), "no", cut_n_c), 
     n_c = str_replace_all(n_c, "_.*", "") %>% make_numeric(), # keep lowest
@@ -127,7 +136,8 @@ mab <- dat_xl$out_behavior %>%
     cite, link, id, title, exp_id, outcome_id,
     
     # about the population
-    species, strain, origin, sex,
+    species, strain, origin, sex, other_life_experience,
+    naive, behavior, major_life_events, trauma_presence,
     
     # about the intervention
     model, model_control, model_postdays, separation_hours,

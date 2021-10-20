@@ -1,0 +1,356 @@
+---
+title: "Behavior - prela"
+author: "Valeria Bonapersona"
+date: "10/14/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+library(tidyverse)
+library(metafor) # for meta-analysis related things
+library(knitr) # for pretty talbes in markdown
+library(bain)
+options(scipen=1, digits=3)
+```
+
+```{r env preparation}
+source("config/utilities.R")
+source("src/general_funs.R")
+
+mab <- readRDS(paste0(temp, "mab_aggr.RDS"))
+
+```
+
+```{r dat freq}
+# frequencies
+dat_freq <- mab %>% 
+  filter(sex == "male") %>% 
+  group_by(trauma_presence, out_grouped) %>% 
+  summarize(
+    n_id = length(unique(id)), 
+    n_comp = length(id), 
+    n_tot = sum(n_c, n_e),
+    .groups = "drop"
+  ) %>% 
+  mutate(group = c("A", "B", "C", "D")) %>% 
+  relocate(group)
+
+```
+
+
+```{r expectations}
+# find all possibilities of the difference between ELA and control for
+# all the groups described by dat_freq
+set <- c("+", "ns", "-") # increase, ns, decrease
+set_all <- rep(list(set), 4)
+all_possibilities <- expand.grid(set_all)
+names(all_possibilities) <- c("A", "B", "C", "D")
+
+# remove unnecessary
+rm(set, set_all)
+```
+
+If you consider that each difference between ELA and control could result in increase, not significant and decrease, there are `r nrow(all_possibilities)` possibilities in which to find them. This is considering only their relationship against 0, and not their (in)equality constraints. 
+
+
+
+```{r prepare blind}
+# filter 
+dat <- mab %>% 
+  mutate(
+    # blinding
+    blind_me = sample(1:2, nrow(mab), replace = T),
+    yi = ifelse(blind_me %% 2 == 0, yi * -1, yi)
+  )
+
+# effect estimates for each group (main analysis)
+dat_aggr <- dat %>% 
+  filter(sex == "male") %>%
+  left_join(dat_freq, by = c("trauma_presence", "out_grouped"))
+
+# one eff size for each group
+dat_aggr <- aggregate(dat_aggr, cluster = group, struct = "ID") # clustering based on inverse variance > gives same result as rma
+## of note: due to the aggregation, most descriptive vars do not have any meaning at this stage
+
+# only info of interest
+dat_aggr <- dat_aggr %>% 
+  select(group, out_grouped, trauma_presence, n_id, n_comp, n_tot, yi, vi) %>% 
+  arrange(group) %>%
+  
+  # important vars for bain
+  mutate(
+    sampm = n_tot,
+    varm = vi, # CHECK
+    covm = varm/sampm
+  )
+
+# get cov matrices (1x1)
+covm <- list()
+for(i in 1:nrow(dat_aggr)) {
+  covm[[i]] <- as.matrix(dat_aggr$covm[[i]])
+}
+
+## save estimates in a separate var
+#estm <- abs(dat_aggr$yi) # make all absolute to remove from hypothesis
+estm <- dat_aggr$yi
+names(estm) <- dat_aggr$group
+
+```
+
+## Blinding
+```{r bain blind}
+# run bain
+set.seed(100)
+
+# write hypothesis as bain wants it
+my_hyp <- paste0(rep(c("A", "B", "C", "D"), each = 2), 
+                 rep(c(">", "=", "<"),4), 0, 
+                 collapse = "; ")
+
+# run bain
+res_blind <- bain(estm, my_hyp, 
+                n=dat_aggr$sampm,
+                Sigma=covm,
+                group_parameters=1,joint_parameters = 0)
+```
+
+From the blinding, A, B, C, D all came out positive. I therefore select those hypotheses that are still possible given this condition. 
+
+There are many hypotheses to test, and some of them need to be preprocessed differently, and therefore cannot be tested together. I therefore decided to use a two step approach. First, I look at the direction of the effects. If the effects are in the same / opposite direction, the relevant hypotheses will be different. 
+
+
+```{r prepare not blind}
+# filter 
+dat <- mab %>% 
+  mutate(
+    # blinding
+    # blind_me = sample(1:2, nrow(mab), replace = T),
+    # yi = ifelse(blind_me %% 2 == 0, yi * -1, yi)
+  )
+
+# effect estimates for each group (main analysis)
+dat_aggr <- dat %>% 
+  filter(sex == "male") %>%
+  left_join(dat_freq, by = c("trauma_presence", "out_grouped"))
+
+# one eff size for each group
+dat_aggr <- aggregate(dat_aggr, cluster = group, struct = "ID") # clustering based on inverse variance > gives same result as rma
+## of note: due to the aggregation, most descriptive vars do not have any meaning at this stage
+
+# only info of interest
+dat_aggr <- dat_aggr %>% 
+  select(group, out_grouped, trauma_presence, n_id, n_comp, n_tot, yi, vi) %>% 
+  arrange(group) %>%
+  
+  # important vars for bain
+  mutate(
+    sampm = n_tot,
+    varm = vi, # CHECK
+    covm = varm/sampm
+  )
+
+# get cov matrices (1x1)
+covm <- list()
+for(i in 1:nrow(dat_aggr)) {
+  covm[[i]] <- as.matrix(dat_aggr$covm[[i]])
+}
+
+## save estimates in a separate var
+#estm <- abs(dat_aggr$yi) # make all absolute to remove from hypothesis
+estm <- dat_aggr$yi
+names(estm) <- dat_aggr$group
+
+```
+
+## Decision tree approach
+I made a decision tree scheme. Each node is a decision (aka informative hypothesis) that can be only yes or no. Going down the tree, you establish which hypothesis / group of hypotheses are most likely. I then intend to use the other outcomes to establish which one is most likely. 
+
+```{r bain tree}
+# run bain
+set.seed(100)
+min_eff <- 0.2
+# hyp 1: abs(A) > 0
+hyp_1 <- paste0("A > ", min_eff) # preprocess with abs
+
+# run bain
+res_1 <- bain(abs(estm), hyp_1, 
+              n=dat_aggr$sampm,
+              Sigma=covm,
+              group_parameters=1,joint_parameters = 0)
+
+## res: abs(A) > 0
+# hyp 2: abs(C) > 0
+hyp_2 <- paste0("C > ", min_eff)
+res_2 <- bain(abs(estm), hyp_2, 
+              n=dat_aggr$sampm,
+              Sigma=covm,
+              group_parameters=1,joint_parameters = 0)
+
+## res 2: abs(C) > 0
+# hyp 3: A and C same direction
+hyp_3 <- c("A < 0 & C < 0; 
+            A < 0 & C > 0;
+            A > 0 & C < 0;
+            A > 0 & C > 0")
+res_3 <- bain(estm, hyp_3, 
+              n=dat_aggr$sampm,
+              Sigma=covm,
+              group_parameters=1,joint_parameters = 0)
+## res A < 0 & C < 0
+
+# hyp 4: abs(A) is >, = or < than abs(C)
+hyp_4 <- c("A > 0;
+            A < 0") # A = 0 is in Hu
+res_4 <- bain(abs(estm), hyp_4, 
+              n=dat_aggr$sampm,
+              Sigma=covm,
+              group_parameters=1,joint_parameters = 0)
+
+## res 4: abs(A) > abs(C)
+# hyp 5 abs(B) > or = 0
+hyp_5 <- paste0("B > ", min_eff)
+res_5 <- bain(abs(estm), hyp_5, 
+              n=dat_aggr$sampm,
+              Sigma=covm,
+              group_parameters=1,joint_parameters = 0)
+
+# res 5: abs(B) < 0.2 (min eff)
+# hyp 6 abs(D) > or = 0
+hyp_6 <- paste0("D > ", min_eff)
+res_6 <- bain(abs(estm), hyp_6, 
+              n=dat_aggr$sampm,
+              Sigma=covm,
+              group_parameters=1,joint_parameters = 0)
+# res 6 abs(D) > 0
+
+# hyp 7: A and D are in the same or opposite direction
+hyp_7 <- c("A < 0 & D < 0; 
+            A < 0 & D > 0;
+            A > 0 & D < 0;
+            A > 0 & D > 0")
+res_7 <- bain(estm, hyp_7, 
+              n=dat_aggr$sampm,
+              Sigma=covm,
+              group_parameters=1,joint_parameters = 0)
+# res 7: A and D are in opposite directions
+
+## The results support a mismatch on sinsetization as preferred theory
+```
+
+
+## Features approach
+```{r bain features}
+## match - mismatch
+# run bain
+set.seed(100)
+min_eff <- 0.2
+# the first 4 give evidence to match-mismatch on sensitization, the second 4 on match-mismatch on hit
+hyp_dir <- c("A > 0 & B < 0;
+              A < 0 & B > 0;
+              C > 0 & D < 0;
+              C < 0 & D > 0;
+             
+              A > 0 & C < 0;
+              A < 0 & C > 0;
+              B > 0 & D < 0;
+              B < 0 & D > 0;
+             ")
+
+# run bain
+res_dir <- bain(estm, hyp_dir, 
+              n=dat_aggr$sampm,
+              Sigma=covm,
+              group_parameters=1,joint_parameters = 0)
+
+## these results show that there is evidence of match mismatch on sensitization
+
+## hit and sens
+### next I want to ask if other theories may be compatible with this theory
+### only ELA and sensitization are not compatible
+### multiple hits is in the first 3 hyp
+### already stressed not compatible
+### ceiling not compatible
+hyp_comp <- c("A < C & B < D;
+              A < C;
+              A < D")
+res_comp <- bain(abs(estm), hyp_comp, 
+              n=dat_aggr$sampm,
+              Sigma=covm,
+              group_parameters=1,joint_parameters = 0)
+### multiply PMPb together?
+## from this I conclude that it is unlikely for multiple hits to increase the effects
+
+```
+
+With two different methods I reached the same conclusion: the match/mismatch hypothesis is the most likely. 
+
+Although above I discussed the match / mismatch in terms of sensitization (effects are opposite for neutral vs stressful learning), I think that this is not correct. Both the neutral and stressful learning tasks are "activated", because the animal *is* doing the task. 
+
+Perhaps this is the first descrepancy that we see between the behavior and explaining the underlying biology: the majority of bio data we have is at rest, or can be considered "activated" depending of how the animals were killed (e.g. first vs last in a cage).
+
+
+
+
+
+## Below here it did not work: direct theories
+Limitations: not all theories can be assessed at the same time "equally". Basically no information comes out if the theories are written wrong. Not informative. 
+
+
+
+```{r imp theories to hyp}
+theories <- read.csv(paste0(raw, "theories.csv"))
+
+theories <- theories %>% 
+  mutate(
+    hyp_n = 1:nrow(.)
+  ) %>% 
+  filter(hyp_n %in% c(2:4,10:16)) # 9 and 2 are the same
+```
+
+I feel that the way I have built my hypotheses is too hard, and in this way they cannot be tested by bain. 
+
+
+```{r bain}
+# run bain
+set.seed(100)
+
+#min_g <- 0.2 # min effect size
+
+# write hypothesis as bain wants it
+my_hyp <- paste(theories$hyp, collapse = "; ")
+
+# run bain
+res_two <- bain(estm, my_hyp, 
+                n=dat_aggr$sampm,
+                Sigma=covm,
+                group_parameters=1,joint_parameters = 0)
+```
+
+
+
+
+```{r perform meta}
+# dat <- mab %>% 
+#   mutate(
+#     # put eff sizes in correct direction
+#     # multiply = ifelse(outcome == "fear_conditioning", 1, -1),
+#     # yi = yi*multiply, 
+#     # blinding
+#     yi = ifelse(as.numeric(id) + sample(c(1,2), size =1) %% 2 == 0, yi * -1, yi) 
+#   )
+
+mod <- rma.mv(
+  yi, vi,
+  mods = ~out_grouped:trauma_presence - 1,
+  data = dat %>% filter(sex == "male"), 
+)
+```
+
+
+

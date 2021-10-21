@@ -192,7 +192,10 @@ exp_ft <- dat_xl$experiments %>%
     model, model_control, model_postdays, separation_hours,
     separation_repetition, separation_light_phase, 
     cross_fostering, litter_size, age_weeks
-  )
+  ) %>% 
+  
+  # exp by mistake double
+  filter(cite != "Mela(2015)b")
 
 
 # Save temp data ----------------------------------------------------------

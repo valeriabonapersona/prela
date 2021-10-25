@@ -45,11 +45,7 @@ exp_ft <- dat_xl$experiments %>%
     
     # only population of interest (keep females for secondary analysis)
     !strain %in% c("balbc", "other", "cd1", "swiss_webster"), # "not_specified"? long_evans_hooded, long_evans, lister_hooded
-    sex != "not_specified", 
-    
-    # remove illegal exp designs
-    !str_detect(other_life_experience, "enriched environment after weaning"),
-    !str_detect(other_life_experience, "hypoxia before sacrifice|running wheel exercise")
+    sex != "not_specified"
   ) %>% 
   
   mutate(
@@ -171,8 +167,15 @@ exp_ft <- dat_xl$experiments %>%
       is.na(end) ~ as.character(round(start)),
       round(start) == (end) ~ as.character(round(start)),
       T ~ paste(round(start), round(end), sep = "-")
-    )
+    ), 
+    
+    # illegal exp design
+    illegal_design =  ifelse(
+      str_detect(other_life_experience, 
+                 "enriched environment after weaning|hypoxia before sacrifice|running wheel exercise"),
+      "yes", "no")
   ) %>% 
+  filter(illegal_design %in% c("no", NA)) %>%
   rename(
     separation_hours = seperation_time
   ) %>%

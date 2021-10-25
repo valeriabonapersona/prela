@@ -64,6 +64,9 @@ mab <- dat_xl$out_behavior %>%
       T ~ habituation
     ), 
     
+    out_grouped = ifelse(outcome %in% "fear_conditioning", "stressful_learning", 
+                         "neutral_learning"),
+    
     # about other life experiences
     origin_num = ifelse(origin == "purchased_pregnant_dams", 1, 0),
     behavior_num = ifelse(behavior == "stressful", 1, 0),
@@ -145,7 +148,7 @@ mab <- dat_xl$out_behavior %>%
     cross_fostering, litter_size, age_weeks, 
     
     # about the outcome
-    outcome, retention_hours, light_dark_phase, handling, 
+    outcome, out_grouped, retention_hours, light_dark_phase, handling, 
     habituation, comment_behavior, 
     
     # statistics

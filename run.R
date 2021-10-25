@@ -4,6 +4,5 @@
 ## output in raw (mab.RDS)
 source("src/mab_xl_to_rds.R")
 
-### from mab data, get eff size estimates and aggregates wherever necessary
-## output in temp (mab_aggr.RDS)
-source("src/mab_effsize.R")
+### from excel sheet, organized data on publications and experiments
+source("src/exp_xls_to_rds.R")

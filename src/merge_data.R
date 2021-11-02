@@ -15,27 +15,31 @@ source("src/general_funs.R")
 ## experiments
 exp <- readRDS(paste0(temp, "info_experiments.RDS"))
 
-# source("~/surfdrive/Work/PhD/mESP/src/data_cleaning_prela.R") # to resave structural_plasticity_complete.RDS
+# source("~/surfdrive/Work/PhD/mMono/src/data_cleaning_prela.R") # to resave structural_plasticity_complete.RDS
 mono <- readRDS("~/surfdrive/Work/PhD/mMono/data/temp/monoamines_complete_prela.RDS")
+mono <- mono %>% mutate(cell_type = "not_applicable")
 
 ## structural plasticity
-# source("~/surfdrive/Work/PhD/mESP/src/data_cleaning_prela.R") # to resave structural_plasticity_complete.RDS
+# source(here::here("~/surfdrive/Work/PhD/mESP/src/data_cleaning_prela.R")) # to resave structural_plasticity_complete.RDS
 mesp <- readRDS("~/surfdrive/Work/PhD/mESP/data/temp/structural_plasticity_prela.RDS")
 
 ## gaba/glutamate
 # source("~/surfdrive/Work/PhD/maGA/src/data_cleaning_prela.R") # to resave structural_plasticity_complete.RDS
 gaglu <- readRDS("~/surfdrive/Work/PhD/maGA/data/temp/gaglu_prela.RDS")
+gaglu <- gaglu %>% select(-outcome_data_type)
 
 ## IEG
 #source("src/ieg_data_cleaning_prela.R")
 ieg <- readRDS(paste0(temp, "ieg_prela.RDS"))
-
+ieg <- ieg %>% mutate(cell_type = "not_applicable")
 
 
 # Merge datasets ----------------------------------------------------------
 all_data <- rbind(mono, mesp) %>% 
   rbind(gaglu) %>% 
-  rbind(ieg)
+  rbind(ieg) %>%
+  data.frame() %>%
+  filter(exp_id %in% exp$exp_id)
 
 all_data <- exp %>% 
   right_join(all_data, by = "exp_id")

@@ -155,6 +155,7 @@ ieg <- dat_xl$out_ieg[c(1:358),] %>%
     brain_area_publication, ba_grouped, brain_area_hemisphere, ba_main, ba_location, ba_layer,
     part_cell, distance_cell,
     data_unit, data_unit_check, ends_with("_c"), ends_with("_e"),
+    ends_with("_type"),
     sys_review_sig
   ) %>%
   unique()

@@ -9,6 +9,7 @@ source("config/utilities.R")
 source("src/general_funs.R")
 
 # upload data
+# source("~/surfdrive/Work/PhD/mESP/src/data_cleaning.R") # to resave structural_plasticity_complete.RDS
 mesp <- readRDS("~/surfdrive/Work/PhD/mESP/data/temp/structural_plasticity_complete.RDS")
 
 exp <- readRDS(paste0(temp, "info_experiments.RDS"))
@@ -20,6 +21,7 @@ double_outcomes <- c(paste0("24129488_1_morph_", 2:6),
                      paste0("27604299_4_morph_", 5:6), 
                      paste0("22371048_2_morph_", 17:19)
 )
+
 '
 double check: https://doi.org/10.1080/10253890.2016.1224842
 27604299
@@ -130,5 +132,4 @@ mesp_aggr <- aggregate(mesp_cleaned, cluster = aggr, rho = rho_df$my_rho)
 
 
 # Save data ---------------------------------------------------------------
-
 saveRDS(mesp_aggr, paste0(temp, "mesp_aggr.RDS"))

@@ -44,7 +44,7 @@ exp_ft <- dat_xl$experiments %>%
     id %in% publ_ft$id, 
     
     # only population of interest (keep females for secondary analysis)
-    !strain %in% c("balbc", "other", "cd1", "swiss_webster"), # "not_specified"? long_evans_hooded, long_evans, lister_hooded
+  #  !strain %in% c("balbc", "other", "cd1", "swiss_webster"), # "not_specified"? long_evans_hooded, long_evans, lister_hooded
     sex != "not_specified"
   ) %>% 
   
@@ -96,6 +96,7 @@ exp_ft <- dat_xl$experiments %>%
       is.na(other_life_experience) ~ "no", 
       str_detect(other_life_experience, "anesthetics|microdialysis|anaesthesia|microchip implantation|stereotactic surgery|probe implantation") ~ "yes",
       other_life_experience %in% c("EPM, 10 min restraint stress prior to decapitation","EPM, 10 min restraint stress 15min prior to decapitation","behavior including MWM and foot-shock") ~ "no",
+      str_detect(other_life_experience, "restraint stress before sacrificing") ~ "no", 
       str_detect(other_life_experience, "chronic restraint stress|variable stress|various stresses|unpredictable chronic stress|fox odor|stress immobilization|triple stressor|restraint stress|chronic constant light|chronic unpredictable stress|stressfull physical stimulation (3h)|short stress paradigm (5h)") ~ "yes",
       str_detect(other_life_experience, "footshock during experiment, housed in pairs|footshock during experiment, cond_fear|footshock during experiment fear conditioning") ~ "no", # already in stressful behavior
       str_detect(other_life_experience, "before chronic restraint") ~ "no", 
@@ -104,7 +105,7 @@ exp_ft <- dat_xl$experiments %>%
       str_detect(other_life_experience, "colorectal distension") ~ "yes",
       str_detect(other_life_experience, "blood collection tail|blood sampl|blood collection|blood from tail cut|cort sampling") ~ "yes",
       T~ "no" ## double check if correct
-    #  T~ other_life_experience ## double check if correct
+     # T~ other_life_experience ## double check if correct
     ),
    
    check_cat_life_events = case_when(

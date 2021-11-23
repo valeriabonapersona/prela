@@ -17,7 +17,13 @@ exp <- readRDS(paste0(temp, "info_experiments.RDS"))
 
 # source("~/surfdrive/Work/PhD/mMono/src/data_cleaning_prela.R") # to resave structural_plasticity_complete.RDS
 mono <- readRDS("~/surfdrive/Work/PhD/mMono/data/temp/monoamines_complete_prela.RDS")
-mono <- mono %>% mutate(cell_type = "not_applicable")
+mono <- mono %>% 
+  mutate(
+    cell_type = "not_applicable", 
+    aggr = ifelse(!double_outcomes == "NA", paste(double_outcomes, "aggr", sep = "_"),
+                  double_outcomes)
+    ) %>% 
+  select(-double_outcomes)
 
 ## structural plasticity
 # source(here::here("~/surfdrive/Work/PhD/mESP/src/data_cleaning_prela.R")) # to resave structural_plasticity_complete.RDS
@@ -26,12 +32,23 @@ mesp <- readRDS("~/surfdrive/Work/PhD/mESP/data/temp/structural_plasticity_prela
 ## gaba/glutamate
 # source("~/surfdrive/Work/PhD/maGA/src/data_cleaning_prela.R") # to resave structural_plasticity_complete.RDS
 gaglu <- readRDS("~/surfdrive/Work/PhD/maGA/data/temp/gaglu_prela.RDS")
-gaglu <- gaglu %>% select(-outcome_data_type)
+gaglu <- gaglu %>% 
+  select(-outcome_data_type)
 
 ## IEG
 #source("src/ieg_data_cleaning_prela.R")
 ieg <- readRDS(paste0(temp, "ieg_prela.RDS"))
-ieg <- ieg %>% mutate(cell_type = "not_applicable")
+ieg <- ieg %>% 
+  rename(aggr = double_outcomes) %>%
+  mutate(
+    cell_type = "not_applicable", 
+    domain = out_grouped,
+    out_grouped = case_when(
+      str_detect(outcome, "erg|egr") ~ "egr_variants", 
+      str_detect(outcome, "fos_b") ~ "fosb_variants", 
+      T ~ outcome
+    )
+  )
 
 
 # Merge datasets ----------------------------------------------------------
@@ -58,72 +75,56 @@ all_data <- exp %>%
 
 # Harmonization across datasets -------------------------------------------
 # change other in strain with actual strain?
-all_data <- all_data %>% 
+all_data <- all_data %>%
   
   mutate(
     remove_analysis = ifelse(is.na(remove_analysis), "no", remove_analysis),
     at_death = ifelse(
       at_death %in% c("novel Shock in shock-probe burial task", "3h after stressful physical stimulation"), "stressed",
-      remove_analysis
+      at_death
     ), 
+    strain = case_when(
+      strain == "other" & id == "26548415" ~ "balbc/c57bl6",
+      strain == "other" & id == "30872090" ~"c3hhenrj",
+      T ~ strain
+    ),
     domain = ifelse(outcome_id == "22922490_5_GLUT_1", "functional_gaba_glut", domain),
-    ba_grouped = case_when(
-      str_detect(brain_area_publication, "striatum|nucleus_accumb|pallid|caud|septum|bed_nucleus") ~ "striatum_and_pallidum",
-      str_detect(brain_area_publication, "nucleus_accumb") ~ "nucleus_accumbens",
-      str_detect(brain_area_publication, "caud") ~ "caudate_putamen",
-      
-      
-      str_detect(brain_area_publication, "hippocamp|dentate|GZ|subiculum") ~ "hippocampal_region",
-      brain_area_publication == "subventricular_zone" ~ "hippocampal_region",
-      str_detect(brain_area_publication, "amygda") ~ "amygdala", 
-      str_detect(brain_area_publication, "frontal") ~ "prefrontal_cortex",
-      str_detect(brain_area_publication, "hypothal|mammilary|suprachiasmatic|incerta|optic|mammillary") ~ "hypothalamic_region",
-      
-      
-      str_detect(brain_area_publication, "thalam|habenula|paraventricular_nucleus") ~ "thalamic_region",
-      str_detect(brain_area_publication, "tegmental|substan|") ~ "vta_substancianigra",
-      str_detect(brain_area_publication, "gray|raphe|midbrain|medulla|pons|brainstem|colliculus|tractus_solitarius|pontine") ~ "brainstem_midbrain_hindbrain",
-      
-      str_detect(brain_area_publication, "cerebellum") ~ "cerebellum",
-      #   str_detect(brain_area_publication, "olfact") ~ "olfactory_areas",
-      
-      str_detect(brain_area_publication, "ventricles|edinger|internal_capsule|cortex|endopiri|olfact|cortical_layer") ~ "other_areas",
-      #  str_detect(brain_area_publication, "cortex") ~ "cortex_other",
-      #   str_detect(brain_area_publication, "medulla|pons|brainstem") ~ "brainstem",
-      #  str_detect(brain_area_publication, "colliculus") ~ "colliculus",
-      
-      T ~ brain_area_publication
-    ), 
     
-    ba_main = case_when(
+    ba_grouped = case_when(
       str_detect(brain_area_publication, "striatum") ~ "striatum",
       str_detect(brain_area_publication, "nucleus_accumb") ~ "nucleus_accumbens",
-      str_detect(brain_area_publication, "pallid") ~ "pallidum",
-      str_detect(brain_area_publication, "caud") ~ "caudate_putamen",
-      str_detect(brain_area_publication, "substant") ~ "sub_nigra",
+      str_detect(brain_area_publication, "pallid|stria_terminalis|septum_lateral|septum") ~ "pallidum",
+      str_detect(brain_area_publication, "caudat|caudo_putamen") ~ "caudate_putamen",
+      str_detect(brain_area_publication, "substant|substancia_nigra") ~ "sub_nigra",
       str_detect(brain_area_publication, "tegment") ~ "vta",
       
       
-      str_detect(brain_area_publication, "hippocamp|dentate|GZ") ~ "hippocampus",
+      str_detect(brain_area_publication, "hippocamp|dentate|GZ|subiculum_ventral") ~ "hippocampal_region",
       str_detect(brain_area_publication, "amygda") ~ "amygdala", 
       str_detect(brain_area_publication, "frontal") ~ "prefrontal_cortex",
-      str_detect(brain_area_publication, "hypothal|mammilary|suprachiasmatic|incerta|optic") ~ "hypothalamic_nuclei",
+      str_detect(brain_area_publication, "hypothal|mammilary|suprachiasmatic|incerta|optic|mammillary|subventricular_zone") ~ "hypothalamic_region",
       
       
-      str_detect(brain_area_publication, "thalam|habenula") ~ "thalamic_nuclei",
+      str_detect(brain_area_publication, "thalam|habenula|paraventricular_nucleus") ~ "thalamic_region",
       str_detect(brain_area_publication, "raphe|midbrain|colliculus") ~ "midbrain",
-      str_detect(brain_area_publication, "gray|medulla|ponsbrainstem|") ~ "brainstem_and_hindbrain",
-      
+      str_detect(brain_area_publication, "gray|medulla|pons|brainstem|pontine|locus_coeruleus") ~ "brainstem_hindbrain",
+      str_detect(brain_area_publication, "tractus_solitarius") ~ "medulla",
       str_detect(brain_area_publication, "olfact") ~ "olfactory_areas",
       
       str_detect(brain_area_publication, "ventricles|edinger|internal_capsule|endopiri") ~ "other_areas",
-      str_detect(brain_area_publication, "cortex") ~ "other_cortical",
+      str_detect(brain_area_publication, "cortex|cortical_layer") ~ "other_cortical",
       #   str_detect(brain_area_publication, "medulla|pons|brainstem") ~ "brainstem",
       #  str_detect(brain_area_publication, "colliculus") ~ "colliculus",
+      str_detect(brain_area_publication, "cerebellum") ~ "cerebellum",
+      str_detect(brain_area_publication, "not_specified") ~ "NA",
       
       T ~ brain_area_publication
     ),
+    ba_grouped = ifelse(str_detect(brain_area_publication, 
+                                "orbital_frontal_agranular_insular_cortex_l"), 
+                     "other_cortical", ba_grouped),
     ba_location = case_when(
+      brain_area_publication == "ventral_tegmental_area" ~ "",
       str_detect(brain_area_publication, "dorsal") ~ "dorsal", 
       str_detect(brain_area_publication, "ventral") ~ "ventral", 
       str_detect(brain_area_publication, "basal") ~ "basal", 
@@ -132,10 +133,16 @@ all_data <- all_data %>%
       str_detect(brain_area_publication, "rostral") ~ "rostral", 
       str_detect(brain_area_publication, "medial") ~ "medial", 
       str_detect(brain_area_publication, "superficial") ~ "superficial", 
+      str_detect(brain_area_publication, "intermediate") ~ "intermediate", 
       str_detect(brain_area_publication, "deep") ~ "deep", 
       str_detect(brain_area_publication, "core") ~ "core", 
+      str_detect(brain_area_publication, "shell") ~ "shell", 
+      str_detect(brain_area_publication, "_central") ~ "central", 
+      str_detect(brain_area_publication, "_lateral") ~ "lateral", 
+      str_detect(brain_area_publication, "basolateral") ~ "basolateral",
       
-        T ~ "not_specified"
+      
+        T ~ ""
    #   T ~ brain_area_publication
     ), 
    
@@ -154,7 +161,15 @@ all_data <- all_data %>%
               is.na(x) ~ "not_available",
               T ~ str_to_lower(x)
             )
-            })
+            }), 
+   
+   
+   # correction typos values 
+   deviation_e = ifelse(outcome_id %in% paste0("17561822_1_bdnf_", c(1:6, 11)), 
+                 abs(as.numeric(as.character(deviation_e)) - 
+                       as.numeric(as.character(estimate_e))), deviation_e), 
+   deviation_e = ifelse(outcome_id %in% paste0("12140784_1_bdnf_", c(1:3, 7)), 
+                        abs(as.numeric(as.character(deviation_e))), deviation_e)
      
   ) %>% 
   select(-c(ba_layer, cell_type))

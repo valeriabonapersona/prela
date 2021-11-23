@@ -123,8 +123,8 @@ exp_ft <- dat_xl$experiments %>%
    origin_num = ifelse(origin == "purchased_pregnant_dams", 1, 0),
    behavior_num = ifelse(behavior == "stressful", 1, 0),
    chronic_num = ifelse(major_life_events == "yes", 1, 0), # single housing is currently not included
-   trauma_score = rowSums(across(ends_with("_num"))), 
-   trauma_presence = ifelse(trauma_score < 1, "no", "yes"),
+   additional_hits = rowSums(across(ends_with("_num"))), 
+   trauma_presence = ifelse(additional_hits < 1, "no", "yes"),
     
     ## age (continues later)
     age_testing_start = str_remove_all(age_testing_start, "not_specified"), 
@@ -190,7 +190,9 @@ exp_ft <- dat_xl$experiments %>%
     
     # about the population
     species, strain, origin, sex, other_life_experience,
-    naive, behavior, major_life_events, housing_after_weaning, trauma_presence, check_cat_life_events,
+    naive, behavior, major_life_events, housing_after_weaning, 
+    additional_hits,
+    trauma_presence, check_cat_life_events,
     
     # about the intervention
     model, model_control, model_postdays, separation_hours,
@@ -199,7 +201,17 @@ exp_ft <- dat_xl$experiments %>%
   ) %>% 
   
   # exp by mistake double
-  filter(cite != "Mela(2015)b")
+  filter(cite != "Mela(2015)b") %>% 
+  
+  # corrections typos
+  
+  mutate(
+    origin = ifelse(origin == "isolation", "not_specified", origin), 
+    model = ifelse(exp_id %in% paste0("12140784_", c(1:4)), "maternal_deprivation", model),
+    model = ifelse(separation_hours == "24", "maternal_deprivation", model), 
+    separation_light_phase = ifelse(id == "25288769", "not_specified", separation_light_phase)
+  )
+  
 
 
 # Save temp data ----------------------------------------------------------

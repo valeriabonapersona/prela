@@ -172,8 +172,10 @@ all_data <- all_data %>%
                         abs(as.numeric(as.character(deviation_e))), deviation_e)
      
   ) %>% 
-  select(-c(ba_layer, cell_type))
-
+  select(-c(ba_layer, cell_type)) %>% 
+  
+  # correction typos found at a later stage
+  filter(age_testing_weeks < 53)
 
 
 # Save data ---------------------------------------------------------------

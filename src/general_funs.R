@@ -114,3 +114,60 @@ t.test2 <- function(m1,m2,var1,var2,n1,n2,m0=0,equal.variance=FALSE)
 }
 
 
+
+
+
+# output for paper --------------------------------------------------------
+
+# Functions ---------------------------------------------------------------
+mod_to_df <- function(mod) {
+  
+  df <-  data.frame(
+    estimate = mod$b,
+    se = mod$se,
+    zval = mod$zval,
+    pval = mod$pval,
+    ci_low = mod$ci.lb, 
+    ci_high = mod$ci.ub
+  ) 
+  
+  df %>% 
+    mutate(
+      sig = case_when(
+        pval < 0.001 ~ "***", 
+        pval < 0.01 ~ "**", 
+        pval < 0.05 ~ "*", 
+        T ~ ""
+      )
+    )
+}
+
+get_n <- function(dat, group_var) {
+  df <- dat %>% 
+    group_by_at(vars(one_of(group_var))) %>% 
+    summarize(
+      across(c("id", "exp_id", "outcome_id"), 
+             function(x) length(unique(x))),
+      .groups = "drop"
+    )
+  
+  names(df) <- c(group_var, paste("n", c("id", "exp_id", "outcome_id"), sep = "_"))
+  
+  return(df)
+  
+}
+
+mv_to_df <- function(dat, group_var, mod) {
+  
+  res <- mod_to_df(mod)
+  new_rownames <- str_remove_all(rownames(res), group_var)
+  rownames(res) <- new_rownames
+  res <- res %>%
+    rownames_to_column(group_var)
+  
+  res %>%
+    left_join(get_n(dat, group_var), by = group_var)
+  
+}
+
+

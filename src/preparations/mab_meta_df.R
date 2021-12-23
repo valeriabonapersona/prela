@@ -43,9 +43,9 @@ mab_meta_hit<- mab_meta %>%
   select(domain, trauma_presence, estimate, se,zval, pval, ci_low, ci_high) %>% 
   mutate(
     domain = case_when(
-      domain == "sLearning" ~ "stressful_learning", 
-      domain == "nsLearning" ~ "nonstressful_learning", 
-      T ~ domain
+      domain == "sLearning" ~ "stressful_learning",
+      domain == "nsLearning" ~ "nonstressful_learning",
+      T ~ as.character(domain)
     ),
     sig = case_when(
       pval < 0.001 ~ "***", 

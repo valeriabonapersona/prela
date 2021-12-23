@@ -117,9 +117,7 @@ t.test2 <- function(m1,m2,var1,var2,n1,n2,m0=0,equal.variance=FALSE)
 
 
 
-# output for paper --------------------------------------------------------
-
-# Functions ---------------------------------------------------------------
+# organize output metafor ---------------------------------------------------------------
 mod_to_df <- function(mod) {
   
   df <-  data.frame(
@@ -169,5 +167,36 @@ mv_to_df <- function(dat, group_var, mod) {
     left_join(get_n(dat, group_var), by = group_var)
   
 }
+
+
+
+
+
+
+# functions CVR/g ---------------------------------------------------------
+
+# run rma.mv on multiple vars
+my_rma <- function(my_dat, var, abs = F, intercept = T) {
+  
+  # choose whether to do absolutes or not
+  if (abs == T) {
+    my_yi <- "abs(yi)"
+  } else {
+    my_yi <- "yi"
+  }
+  
+  if (intercept == T) {
+    int <- ""
+  } else {
+    int <- "-1"
+  }
+  
+  # run rma
+
+    res <- eval(parse(text = paste0("rma.mv(", my_yi,", vi, data =", deparse(substitute(my_dat)),", mods = ~", var, int,")"))) 
+
+  return(res)
+}
+
 
 

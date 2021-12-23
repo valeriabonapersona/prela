@@ -9,10 +9,7 @@
 
 
 # Upload data -------------------------------------------------
-load("~/surfdrive/Work/PhD/MAB/MAB_Analysis/MAB_Analysis_submitGit/data.RData")
-mab <- data %>%
-  filter(domain != "noMeta") %>%
-  droplevels()
+source("src/upload_mab.R")
 
 mab_ft <- mab %>% 
   filter(sex == "M")
@@ -20,11 +17,12 @@ mab_ft <- mab %>%
 
 # Behavior -------------------------------------------------------------
 mod_mab <- rma.mv(yi, vi,
-                  random = list(~1 | each, ~1 | exp),
+                  random = list(~1 | outcome_id, ~1 | exp_id),
                   mods   = ~domain - 1 ,
-                  data = mab_male)
+                  data = mab_ft)
+
 res_mab <- mod_to_df(mod_mab)
-res_mab <- mab_male %>% 
+res_mab <- mab_ft %>% 
   group_by(domain) %>% 
   summarize(
     n_id = length(unique(id)), 
@@ -39,8 +37,11 @@ res_mab <- mab_male %>%
       domain == "nsLearning" ~ "nonstressful_learning", 
       T ~ as.character(domain)
     ),
-    estimate = ifelse(domain %in% c("nonstressful_learning", "social"), -1*estimate, estimate)
+    estimate = ifelse(domain %in% c("nonstressful_learning", "social"), -1*estimate, estimate),
+    ci_low = ifelse(domain %in% c("nonstressful_learning", "social"), -1*ci_low, ci_low),
+    ci_high = ifelse(domain %in% c("nonstressful_learning", "social"), -1*ci_high, ci_high)
+    
   ) %>% 
   `rownames<-`( NULL )
 
-rm(mod_mab, mab_male)
+rm(mod_mab, mab_ft)

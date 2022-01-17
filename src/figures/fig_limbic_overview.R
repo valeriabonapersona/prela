@@ -31,7 +31,13 @@ g_limbic_overview <- limbic_meta_df %>%
                     levels = c("morphology", "BDNF", "IEG",  "neurogenesis", 
                                "5HT-related", "DA-related", "NE", 
                                "receptors and transporters","mono \n enz",
-                               "GABA & glutamate"))
+                               "GABA & glutamate")), 
+    out_grouped = str_replace_all(out_grouped, "inhibitory", "inhib.") %>% 
+      str_replace_all("excitatory", "excit.") %>%
+      str_replace_all("amparepsc", "ampar \nepsc") %>%
+      str_replace_all("nmdarepsc", "nmdar \nepsc") %>% 
+      str_replace_all("fepsp", "fEPSP \n")
+      
   ) %>%
   ggplot(aes(str_replace_all(ba_grouped, "_", "\n "),
              str_replace_all(out_grouped, "_", " "),

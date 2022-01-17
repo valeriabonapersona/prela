@@ -71,13 +71,16 @@ g_cartoon_ela <- ggplot(data.frame(x = c(-5, 5)), aes(x = x)) +
   geom_segment(aes(x = 1, y = 0.2, xend = 3, yend = 0.2),
                arrow = arrow(length = unit(0.5, "cm"))) + 
   
+  # labels
+  labs(x = " ", y = " ") +
+  
   my_theme + 
   scale_fill_grey(start = 0, end = 0.8) + 
   scale_color_grey(start = 0, end = 0.8) + 
-    theme(axis.title.x=element_blank(),
+    theme(#axis.title.x=element_blank(),
           axis.text.x=element_blank(),
           axis.ticks.x=element_blank(),
-          axis.title.y=element_blank(),
+          #axis.title.y=element_blank(),
           axis.text.y=element_blank(),
           axis.ticks.y=element_blank(), 
           legend.position = "none"

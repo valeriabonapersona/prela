@@ -28,7 +28,8 @@ morph_meta_edit <- data.frame(
   pval = morph_meta_mod$test$pvalues
 ) %>% 
   filter(str_detect(trauma_presence, "trauma_presence")) %>% 
-  mutate(trauma_presence = str_remove_all(trauma_presence, "trauma_presence")) %>%
+  mutate(trauma_presence = str_remove_all(trauma_presence, "trauma_presence"), 
+         domain = ifelse(estimate > 0, "int_morphology", domain)) %>%
   left_join(get_n(morph, "trauma_presence")) %>%
   mutate(
     ci_diff = abs((sd *3.92)/sqrt(n_outcome_id)),

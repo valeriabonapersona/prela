@@ -33,7 +33,8 @@ mab_meta_edit <- mab_meta %>%
 #saveRDS(mab_meta_edit, paste0(final, "mab_meta_res.RDS"))
 
 mab_meta_hit<- mab_meta %>%
-  filter(str_detect(test, "Yes|No")) %>% 
+  filter(str_detect(test, "Yes|No"), 
+         !str_detect(test, "social")) %>% 
   mutate(trauma_presence = ifelse(str_detect(test, "Yes"), "yes", "no")) %>%
   rename(zval = Zvalue, 
          pval = Pvalue_bonfCorr, 

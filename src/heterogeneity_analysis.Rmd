@@ -1,0 +1,676 @@
+---
+title: "paper_variation_analysis"
+author: "Valeria Bonapersona"
+date: "11/24/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+library(tidyverse)
+library(metafor) # for meta-analysis related things
+library(knitr) # for pretty talbes in markdown
+options(scipen=1, digits=3)
+```
+
+```{r env preparation}
+source("config/utilities.R")
+source("src/general_funs.R")
+## effect sizes
+prela_aggr <- readRDS(paste0(final, "prela_effsize_aggr.RDS"))
+
+males <- prela_aggr %>% filter(sex == "male")
+```
+
+```{r epinephrine df}
+temp_path <- "~/surfdrive/Work/PhD/mELA_materials/Eline/all_files_mELA_2020/5. Files/outcomes_mELA_VB_v3.xlsx"
+dat_xl <- read_my_sheets(temp_path, c("publications","experiments", "out_plasma"))
+
+plasma_epi <- dat_xl[["out_plasma"]] %>% 
+  left_join(exp, by = "exp_id") %>% 
+  rename(
+    mean_e = estimate_e, 
+    mean_c = estimate_c, 
+    sem_e = deviation_e, 
+    sem_c = deviation_c
+  ) %>% 
+  mutate(
+    sem_c = ifelse(sem_c == "not_specified", sem_e, sem_c), 
+    sem_c = as.numeric(sem_c),
+    sd_c = sem_c * sqrt(n_c),
+    sd_e = sem_e * sqrt(n_e)
+  ) %>% 
+  filter(outcome == "E")
+
+yolo <- bind_rows(dat, plasma_epi)
+```
+
+```{r i2 functions}
+# 
+# #2-level model with both sigmas constrained to zero
+# mod_noWithnoBet <- rma.mv(yi, vi, 
+#                      random = list(~1 | each, ~1 | exp),
+#                      mod = ~domain:hit2Grouped -1,
+#                      sigma2 = c(0, 0),
+#                      digits = 3,
+#                      method = "REML",
+#                      data = dat)
+# 
+# #likelihood ratio test to determine the significance of the between-study variance
+# anova(mod, mod_noWithnoBet)
+# 
+# #2-level model without within-study variance >> between-study variance is estimated
+# mod_noWith <- rma.mv(yi, vi, 
+#                      random = list(~1 | each, ~1 | exp),
+#                      mod = ~domain:hit2Grouped -1,
+#                      sigma2 = c(0, NA),
+#                      digits = 3,
+#                      method = "REML",
+#                      data = dat)
+# 
+# #likelihood ratio test for significance of the between-study variance
+# anova(mod, mod_noWith)
+# 
+# #2-level model without between-study variance >> within-study variance is estimated
+# mod_noBet <- rma.mv(yi, vi, 
+#                     random = list(~1 | each, ~1 | exp),
+#                     mod = ~domain:hit2Grouped -1,
+#                     sigma2 = c(NA, 0),
+#                     digits = 3,
+#                     method = "REML",
+#                     data = dat)
+# 
+# #ikelihood ratio test for significance of the within-study variance
+# anova(mod, mod_noBet)
+
+# calculate i2
+get_i2_ML <- function(dat, mod) {
+  #determining how the total variance is distributed over the 3 levels of the meta-analytic model
+  #adapted from Assink(2016)
+  n <- length(dat$vi)
+  list.inverse.variances <- 1 / (dat$vi)
+  sum.inverse.variances <- sum(list.inverse.variances)
+  squared.sum.inverse.variances <- (sum.inverse.variances) ^ 2
+  list.inverse.variances.square <- 1 / (dat$vi ^ 2)
+  sum.inverse.variances.square <- sum(list.inverse.variances.square)
+  
+  numerator <- (n - 1) * sum.inverse.variances
+  denominator <- squared.sum.inverse.variances - sum.inverse.variances.square
+  estimated.sampling.variance <- numerator / denominator
+  
+  I2_1 <- (estimated.sampling.variance) / (mod$sigma2[1] +
+                                             mod$sigma2[2] + estimated.sampling.variance)
+  I2_2 <- (mod$sigma2[1]) / (mod$sigma2[1] +
+                               mod$sigma2[2] + estimated.sampling.variance)
+  I2_3 <- (mod$sigma2[2]) / (mod$sigma2[1] +
+                               mod$sigma2[2] + estimated.sampling.variance)
+  
+  modVariance_1 <- I2_1 * 100
+  modVariance_2 <- I2_2 * 100
+  modVariance_3 <- I2_3 * 100
+  
+  return(
+    data.frame(
+      i2_1 = round(modVariance_1, 2),
+      i2_2 = round(modVariance_2, 2),
+      i2_3 = round(modVariance_3, 2)
+    )
+  )
+}
+
+
+get_i2_total <- function(dat, mod) {
+  # calculate I2
+  W <- diag(1/dat$vi)
+  X <- model.matrix(mod)
+  P <- W - W %*% X %*% solve(t(X) %*% W %*% X) %*% t(X) %*% W
+  i2 <- 100 * sum(mod$sigma2) / (sum(mod$sigma2) + 
+                                             (mod$k-mod$p)/sum(diag(P))) 
+  return(round(i2, 2))
+
+}
+
+get_i2 <- function(dat, mod) {
+  cbind(
+  data.frame(total = get_i2_total(dat, mod)),
+  get_i2_ML(dat, mod)
+)
+}
+
+```
+
+
+## i2 old meta-analyses
+```{r i2 from models in papers}
+dir_mono <- "~/surfdrive/Work/PhD/mMono/"
+dir_strplas <- "~/surfdrive/Work/PhD/mESP/"
+dir_gaglu <- "~/surfdrive/Work/PhD/maGA/"
+dir_ieg <- "~/surfdrive/Work/PhD/mELA_materials/mIEG/mIEG/"
+
+mono_i2 <- readRDS(paste0(dir_mono, final,"prela_mono_i2.RDS")) ## in mono directory
+morph_i2 <- readRDS(paste0(dir_strplas, final,"prela_morph_i2.RDS"))
+neuro_i2 <- readRDS(paste0(dir_strplas, final,"prela_neuro_i2.RDS"))
+bdnf_i2 <- readRDS(paste0(dir_strplas, final, "prela_bdnf_i2.RDS"))
+gaglu_bioch_i2 <- readRDS(paste0(dir_gaglu, final, "prela_gaglu_biochem_i2.RDS"))
+gaglu_func_i2 <- readRDS(paste0(dir_gaglu, final, "prela_gaglu_func_i2.RDS"))
+ieg_i2 <- readRDS(paste0(dir_ieg, final, "prela_cfos_i2.RDS"))
+
+i2_previous <- data.frame(
+  domain = c("monoamines", "morphology", "neurogenesis", "bdnf", "gaglu_bioch", "gaglu_func", "c_fos"), 
+  bind_rows(mono_i2, morph_i2, neuro_i2, bdnf_i2, gaglu_bioch_i2, gaglu_func_i2, ieg_i2)
+)
+
+
+```
+
+i2 total median(iqr): `r paste0(median(i2_previous$total), "(", IQR(i2_previous$total),")")`
+
+i2 total mean(sd): `r paste0(round(mean(i2_previous$total),2), "(", round(sd(i2_previous$total),2),")")`
+
+
+## i2 new meta-analyses
+```{r sufficient for meta}
+outba_suff <- males %>% 
+  group_by(ba_grouped, out_grouped) %>% 
+  summarize(
+    n_id = length(unique(id)), 
+    n_exp = length(unique(exp_id)), 
+    n_comp = length(exp_id)
+  ) %>% 
+  filter(n_id > 2)
+```
+
+```{r functions perform meta-analyses}
+'
+  for each combination of ba_grouped and out_grouped, perform:
+  1) 3-level meta-analysis and get i2 at each level, boh with exp_id and id
+  2) random effects meta-analysis
+  3) random effects meta-analysis with moderators and look at how much explained variance
+'
+
+mod_vars <- c("species", "naive", )
+
+my_MA <- function(dat, mods = NULL) {
+    
+  if (is.null(mods) | length(mods) < 1) {
+    # perform random effects meta-analysis
+    res <- rma(yi, vi, data = dat, method = "REML")
+  } else {
+    # add moderators
+    res <- eval(parse(text = paste0("rma(yi, vi, data = dat, mods = ~", mods,")"))) 
+  }
+    
+  return(res)
+    
+}
+
+my_MLMA_mods <- function(dat, exp_or_id = "exp_id", mods = NULL) {
+  
+   assertthat::assert_that(length(exp_or_id) == 1)
+  # perform multilevel meta-analysis
+  assertthat::has_name(dat, exp_or_id)
+  
+    # select element for multilevel
+  dat <- dat %>%
+    rename(nest = exp_or_id)
+  
+    
+  if (is.null(mods) | length(mods) < 1) {
+    # perform random effects meta-analysis
+      res <- rma.mv(yi, vi,
+                random = list(~1|outcome_id, ~1|nest), 
+                data = dat)
+  } else {
+    # add moderators
+    res <- eval(parse(text = paste0("rma.mv(yi, vi, data = dat,random = list(~1|outcome_id, ~1|nest), mods = ~", mods,")"))) 
+  }
+    
+  return(res)
+    
+}
+# 
+# my_MLMA <- function(dat, exp_or_id = "exp_id") {
+#   
+#   # exp_or_id can either be "none" and it will perform a random effects, or be 
+#   # the name of the variable that you want to perform the ML effect on
+#   
+#   assertthat::assert_that(length(exp_or_id) == 1)
+# 
+#   # perform multilevel meta-analysis
+#   assertthat::has_name(dat, exp_or_id)
+# 
+#   # select element for multilevel
+#   dat <- dat %>%
+#     rename(nest = exp_or_id)
+# 
+#     # perform meta-analysis
+#   res <- rma.mv(yi, vi,
+#                 random = list(~1|outcome_id, ~1|nest), 
+#                 data = dat)
+# 
+#   
+#   return(res)
+#   
+# }
+
+get_i2_rma <- function(mod, r2 = "no") {
+  data.frame(
+    i2 = round(mod$I2,2),
+    r2 = ifelse(r2=="no", NA, round(mod$R2, 2))
+  )
+}
+
+get_i2_allmods <- function(my_dat) {
+  
+  # random effect model
+  mod_random <- my_MA(my_dat, "none")
+  i2_random <- get_i2_rma(mod_random)
+  
+  # 3-level with experiment
+  mod_exp <- my_MA(my_dat, "exp_id")
+  i2_exp <- get_i2(my_dat, mod_exp)
+  names(i2_exp) <- paste(names(i2_exp), "exp", sep="_")
+  
+  # 3-level with id
+  mod_id <- my_MA(my_dat, "id")
+  i2_id <- get_i2(my_dat, mod_id)
+  names(i2_id) <- paste(names(i2_id), "id", sep="_")
+
+  # merge all
+  res <- data.frame(
+    ba_grouped = my_ba, 
+    out_grouped = my_out
+  ) %>% cbind(i2_random, i2_exp, i2_id)
+  
+  return(res)
+}
+
+
+make_string_mods <- function(data, vars = c("species", "model", "trauma_presence", "at_death")) {
+  
+  my_mods <- NULL
+  
+  for(i in vars) {
+    this_var <- ifelse(n_distinct(data[,i]) > 1, i, "")
+    my_mods <- c(my_mods, this_var)
+  }
+
+  mods <- my_mods[!my_mods == ""]
+  mods <- paste(mods, collapse = "+")
+  
+  return(mods)
+}
+
+
+get_summ_stats <- function(mod){
+
+    data.frame(
+    estimate = mod$b, 
+    se = mod$se, 
+    ci_low = mod$ci.lb, 
+    ci_high = mod$ci.ub,
+    pval = mod$pval
+  )
+  
+}
+
+```
+
+```{r i2 for each analysis}
+# i2 for everything
+res <- NULL
+#for (comb in c(1:9, 11:12, 14:21, 23:28, 30:43, 45:nrow(outba_suff))) {
+#for(comb in 1:nrow(outba_suff)) {
+for (comb in c(1:3, 6:9, 11:22, 24:39, 41:49, 51, 53:55, 58:nrow(outba_suff))) {
+
+  # keep track
+  print(comb)
+  
+  # create dataset
+  my_ba <- outba_suff[comb, ]$ba_grouped
+  my_out <- outba_suff[comb, ]$out_grouped
+  my_dat <- males %>% filter(ba_grouped == my_ba, out_grouped == my_out)
+  
+  # run models and get i2
+  ## no moderators
+  nomods <- my_MA(my_dat)
+  res_nomod <- get_i2_rma(nomods)
+  names(res_nomod) <- paste(names(res_nomod), "nomods", sep = "_")
+  
+  ## with moderators
+  my_mods <- make_string_mods(my_dat)
+  withmods <- my_MA(my_dat, mods = my_mods)
+  res_withmods <- get_i2_rma(withmods, r2 = "yes")
+  names(res_withmods) <- paste(names(res_withmods), "withmods", sep = "_")
+
+  # merge together and save
+  my_res <- data.frame(
+    ba_grouped = my_ba, 
+    out_grouped = my_out
+  ) %>%
+    cbind(res_nomod, res_withmods)
+  
+  res <- bind_rows(res, my_res)
+}
+
+```
+
+```{r visual heterogeneity}
+res_het <- res %>% 
+  left_join(prela_aggr %>% 
+              select(out_grouped, domain) %>% 
+              unique(), by = "out_grouped") %>%
+  left_join(outba_suff) %>% 
+  mutate(
+    out_type = case_when(
+      out_grouped %in% c("branching", "length_dendrites", "volume", "spines",
+                    "n_primary_dendrites", "n_basal_dendrite") ~ "morphology",
+      out_grouped %in% c("brdu_long", "brdu_short", "ki67", "dcx") ~ "biochem", #"neurogenesis",
+      out_grouped %in% c("TH", "TPH", "MAO_A", "COMT", "MHPG", "TPH2") ~ "biochem", #"enzymes", 
+      out_grouped %in% c("DA", "DOPAC/DA", "5HIAA/5HT", "5HT", "NE", 
+                    "DOPAC", "HVA", "5HIAA", "VMA","VMA/NE", 
+                    "HVA/DA", "3MT", "DOPAC_HVA/DA") ~ "biochem", 
+      out_grouped %in% c("gaba_a", "bdnf", "gad", "vgat", "vglut", "gabrg2",
+                    "gabrd", "glast", "m_glu_r") ~ "biochem",
+      out_grouped %in% c("nmda", "ampa", "LTP",  
+                    "gaba", "gaba_b", "glutamine", "glutamate") ~ "functional", 
+      out_grouped %in% c("c_fos") ~ "biochem", #"other"
+    )
+  )
+
+# there is no relationship between n_id and explained r2
+res_het %>% 
+  ggplot(aes(n_id, r2_withmods)) + 
+  geom_point()
+
+# no relationship between i2 and r2 expl
+res_het %>% 
+  ggplot(aes(i2_nomods, r2_withmods)) + 
+  geom_point()
+
+# explained heterogeneity with our life variables
+res_het %>% 
+  ggplot(aes(r2_withmods)) + 
+  geom_histogram() + 
+  my_theme + 
+  labs(x = expression("Explained heterogeneity R"^"2"),
+       y = "N outcomes per brain area")
+
+# unexplained heterogeneity per type 
+res_het %>% 
+  ggplot(aes(out_type, i2_nomods)) + 
+  geom_point()
+
+res_het %>% 
+  ggplot(aes(out_type, i2_withmods)) + 
+  geom_violin(summary="stats", fill = "lightgrey") +
+  geom_boxplot(width = 0.1, fill = "white") + 
+  geom_point() +
+  my_theme
+
+```
+
+```{r lnCV on control group}
+males %>% 
+  ggplot(aes(log(yi), log(vi))) + 
+  geom_point() + 
+  my_theme
+```
+
+```{r CVR analysis df}
+dat <- prela_aggr %>% 
+  filter(!is.na(yi_cvr), !is.na(vi_cvr), vi_cvr < 90) %>%
+  mutate(
+    ba_grouped = ifelse(ba_grouped %in% c("other_cortical", "midbrain",
+                                          "cerebellum", "medulla", 
+                                          "olfactory_areas", "other_areas"),
+                        "other", ba_grouped),
+    origin_num = ifelse(origin == "purchased_pregnant_dams", 1, 0), 
+    major_life_events_num = ifelse(major_life_events == "yes", 1, 0), 
+    behavior_num = ifelse(behavior == "stressful", 1, 0)
+  ) %>% 
+  rowwise() %>% 
+  mutate(
+    trauma_score = factor(sum(origin_num, major_life_events_num, behavior_num), levels = c("0", "1", "2", "3")),
+  trauma_score = paste0("+", trauma_score)
+  ) %>% 
+  select(-c(ends_with("_num"))) %>%
+  mutate(
+    life_exp = case_when(
+      trauma_score == "+0" & behavior %in% c("naive", "no_behavior") ~ "naive", 
+      trauma_score == "+0" & behavior %in% c("non_stressful") ~ "non_stressful", 
+      T ~ paste(trauma_score, "hit")
+    )
+  )
+  
+```
+
+```{r functions CVR/g}
+
+# run rma.mv on multiple vars
+my_rma <- function(var, abs = F, intercept = T) {
+  
+  # choose whether to do absolutes or not
+  if (abs == T) {
+    my_yi <- "abs(yi)"
+  } else {
+    my_yi <- "yi"
+  }
+  
+  if (intercept == T) {
+    int <- ""
+  } else {
+    int <- "-1"
+  }
+  
+  # run rma
+  res <- eval(parse(text = paste0("rma.mv(", my_yi,", vi, data = dat_overall, mods = ~", var, int,")"))) 
+  return(res)
+}
+
+count_comparisons <- function(var) {
+  dat %>% 
+    group_by(.dots = var) %>% 
+    count() %>% 
+    pull(n)
+}
+
+rma_summ_stats <- function(rma_obj, x) {
+
+    data.frame(
+    group = x,
+    estimate = rma_obj$b, 
+    se = rma_obj$se, 
+    ci_low = rma_obj$ci.lb, 
+    ci_high = rma_obj$ci.ub,
+    pval = rma_obj$pval, 
+    n = count_comparisons(x)
+  )
+  
+}
+
+get_rma_summ_stats <- function(x, abs = T) {
+  res_rma <- my_rma(var = x, abs = abs, intercept = F)
+  res_df <- rma_summ_stats(res_rma, x = x)
+  return(res_df)
+}
+
+```
+
+
+```{r g analysis}
+
+dat_overall <- dat %>% 
+  select(sex, species, model, life_exp,  origin, major_life_events, behavior, housing_after_weaning, trauma_score, 
+         out_grouped, outcome, ba_grouped, yi, vi)
+
+vars_moderators <- c("species", "sex", "model", "life_exp"
+                     #"behavior", "trauma_score", "housing_after_weaning", 
+                  #   "major_life_events", "origin", "out_grouped", 
+                #  "ba_grouped"
+                  )
+
+lapply(vars_moderators, function(vars) get_rma_summ_stats(x = vars)) -> res_ls
+
+res_df <- bind_rows(res_ls) %>% 
+  rownames_to_column(var = "subgroup") %>% 
+  rowwise() %>% 
+  mutate(subgroup = str_remove(subgroup, group))
+
+order_facets <- c("species", "sex", "model", #"brain areas", 
+                  "life exp", "out grouped"
+                  # "hits", "naive", "origin", "behavior", 
+                  # "chronic\ntrauma", 
+                  # "housing"
+                  )
+
+order_ylab <- c("rat", "mice", "male", "female", 
+                "licking grooming", "limited nesting", "isolation", 
+                "maternal separation", "maternal deprivation",
+                "naive", "non stressful", "+1 hit", "+2 hit", "+3 hit")
+
+g_g <- res_df %>% 
+  mutate(
+    subgroup = str_replace_all(subgroup, "_", " "),
+    group = case_when(
+      group == "ba_grouped" ~ "brain_areas",
+      group == "housing_after_weaning" ~ "housing", 
+      group == "major_life_events" ~ "chronic\ntrauma", 
+      group == "trauma_score" ~ "hits",
+      T ~ group),
+    group = str_replace_all(group, "_", " ")
+  ) %>%
+  ggplot(aes(factor(subgroup, levels = rev(order_ylab)), estimate)) + 
+#  geom_hline(yintercept = 0, color = "grey") +
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.2, color = "grey") +
+  geom_point() + 
+#  ylim(0.15, 1.3) + 
+  facet_grid(factor(group, levels = order_facets)~., scales = "free", space = "free", switch = "both") + 
+  coord_flip() + 
+  labs(y = "abs(Hedge's g)",
+    #y = "CVR", 
+       x = "Potential moderators") +
+  my_theme + 
+  geom_text(aes(label = n), y= 0.2) + 
+#  geom_text(aes(label = n), y= -0.23) + 
+
+  theme(panel.spacing = unit(0.75, "lines")) +
+  theme(#panel.spacing.x = unit(3,"line"), 
+        strip.background = element_rect(color = "white")) +       theme(strip.text.y = element_text(size = 6, colour = "black",face = "bold"))
+
+
+```
+
+
+```{r CVR analysis}
+
+dat_overall <- dat %>% 
+  select(sex, species, model, life_exp,  origin, major_life_events, behavior, housing_after_weaning, trauma_score, 
+         out_grouped, outcome, ba_grouped, yi_cvr, vi_cvr) %>% 
+  rename(yi = yi_cvr, vi = vi_cvr)
+
+vars_moderators <- c("species", "sex", "model", "life_exp"
+                     #"behavior", "trauma_score", "housing_after_weaning", 
+                  #   "major_life_events", "origin", "out_grouped", 
+                #  "ba_grouped"
+                  )
+
+lapply(vars_moderators, function(vars) get_rma_summ_stats(x = vars, abs = F)) -> res_ls
+
+res_df <- bind_rows(res_ls) %>% 
+  rownames_to_column(var = "subgroup") %>% 
+  rowwise() %>% 
+  mutate(subgroup = str_remove(subgroup, group))
+
+g_cvr <- res_df %>% 
+  mutate(
+    subgroup = str_replace_all(subgroup, "_", " "),
+    group = case_when(
+      group == "ba_grouped" ~ "brain_areas",
+      group == "housing_after_weaning" ~ "housing", 
+      group == "major_life_events" ~ "chronic\ntrauma", 
+      group == "trauma_score" ~ "hits",
+      T ~ group),
+    group = str_replace_all(group, "_", " ")
+  ) %>%
+#  ggplot(aes(reorder(subgroup, estimate), estimate)) + 
+  ggplot(aes(factor(subgroup, levels = rev(order_ylab)), estimate)) + 
+#  geom_hline(yintercept = 0, color = "grey") +
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.2, color = "grey") +
+  geom_point() + 
+#  ylim(0.15, 1.3) + 
+  facet_grid(factor(group, levels = order_facets)~., scales = "free", space = "free", switch = "both") + 
+  coord_flip() + 
+  labs(#y = "abs(Hedge's g)",
+    y = "CVR", 
+       x = "Potential moderators") +
+  my_theme + 
+  geom_text(aes(label = n), y= -0.23) + 
+#  geom_text(aes(label = n), y= -0.23) + 
+
+  theme(panel.spacing = unit(0.75, "lines")) +
+  theme(#panel.spacing.x = unit(3,"line"), 
+        strip.background = element_rect(color = "white")) +       theme(strip.text.y = element_text(size = 6, colour = "black",face = "bold"))
+
+
+```
+
+```{r g/CVR fig}
+ggpubr::ggarrange(
+  g_g, g_cvr,
+  ncol = 2, labels = c("A", "B")
+)
+```
+
+```{r CVR per outcome}
+# CVR for everything
+cvr_out <- NULL
+
+domainba_suff <- males %>% 
+  filter(!is.na(yi_cvr), !is.na(vi_cvr)) %>%
+  group_by(ba_grouped, domain) %>% 
+  summarize(
+    n_id = length(unique(id)), 
+    n_exp = length(unique(exp_id)), 
+    n_comp = length(exp_id)
+  ) %>% 
+  filter(n_id > 2)
+
+for (comb in c(1:nrow(domainba_suff))) {
+
+  # keep track
+  print(comb)
+  
+  # create dataset
+  my_ba <- domainba_suff[comb, ]$ba_grouped
+  my_dom <- domainba_suff[comb, ]$domain
+  my_dat <- males %>% filter(ba_grouped == my_ba, domain == my_dom) %>% 
+    select(-c(yi, vi)) %>%
+    rename(yi = yi_cvr, vi = vi_cvr)
+  
+  # run model
+  my_mod <- my_MA(my_dat)
+  summ_stat <- get_summ_stats(my_mod)
+  
+  # merge together and save
+  my_res <- data.frame(
+    ba_grouped = my_ba, 
+    out_grouped = my_dom
+  ) %>%
+    cbind(summ_stat)
+  
+  cvr_out <- bind_rows(cvr_out, my_res)
+}
+
+x <- males %>% select(-c(yi,vi)) %>% rename(yi=yi_cvr, vi=vi_cvr) %>% 
+  filter(ba_grouped %in% c("hippocampal_region", "prefrontal_cortex"))
+my_MLMA(x, "exp_id")
+my_MLMA(x, "id")
+my_MLMA_mods(x, "exp_id", mods = "ba_grouped-1")
+```
+
